@@ -1,7 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
 
-
 class Registro(models.Model):
     titulo = models.CharField(max_length=100)
     local = models.CharField(max_length=100)
@@ -15,8 +14,6 @@ class Registro(models.Model):
     rejeitados = models.IntegerField()
     retrabalhados = models.IntegerField()
     operadores = models.ManyToManyField(User)
-    hora_entrada = models.TimeField(null=True, blank=True)
-    hora_saida = models.TimeField(null=True, blank=True)
 
     def __str__(self):
         return self.titulo
@@ -24,5 +21,10 @@ class Registro(models.Model):
 
 class RegistroOperador(models.Model):
     registro = models.ForeignKey(Registro, on_delete=models.CASCADE)
-    operadores = models.ForeignKey(User, on_delete=models.CASCADE)
-    horas_trabalhadas = models.IntegerField()
+    operador = models.ForeignKey(User, on_delete=models.CASCADE)
+    hora_inicio = models.CharField(max_length=100, null=True)
+    hora_fim = models.CharField(max_length=100, null=True)
+
+    def __str__(self):
+        return f"{self.registro.titulo} - {self.operador.username}"
+

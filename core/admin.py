@@ -1,5 +1,5 @@
 from django.contrib import admin
-from core.models import Registro
+from core.models import Registro, RegistroOperador
 
 
 class RegistroAdmin(admin.ModelAdmin):
@@ -11,4 +11,5 @@ class RegistroAdmin(admin.ModelAdmin):
     get_operadores.short_description = 'Operadores'
 
 
-admin.site.register(Registro, RegistroAdmin)
+admin.site.register(Registro)
+admin.site.register(RegistroOperador)

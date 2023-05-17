@@ -18,11 +18,22 @@ class RegistroSerializer(serializers.ModelSerializer):
         model = Registro
         fields = '__all__'
 
+class DetailRegistroSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Registro
+        fields = "__all__"
+        depth = 1
+
 
 class RegistrOpoSerializer(serializers.ModelSerializer):
-    operadores = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), many=True)
-
+    operador = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
+    
     class Meta:
         model = RegistroOperador
-        fields = '__all__'
+        fields = "__all__"
+
+class RegistropDetail(serializers.ModelSerializer):
+    class Meta:
+        model = RegistroOperador
+        fields = "__all__"
+        depth = 1
