@@ -1,39 +1,22 @@
-# serializers.py
 from rest_framework import serializers
-from django.contrib.auth.models import User
-from core.models import Registro, RegistroOperador
+from core.models import Local, Usuario, Registro
 
-
-class UserSerializer(serializers.ModelSerializer):
+class LocalSerializer(serializers.ModelSerializer):
     class Meta:
-        model = User
-        fields = ['id', 'username']
+        model = Local
+        fields = '__all__'
 
+class UsuarioSerializer(serializers.ModelSerializer):
+    total_horas_trabalhadas = serializers.ReadOnlyField()
+    produtividade = serializers.ReadOnlyField()
+
+    class Meta:
+        model = Usuario
+        fields = '__all__'
 
 class RegistroSerializer(serializers.ModelSerializer):
-    operadores = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), many=True)
+    horas_trabalhadas = serializers.ReadOnlyField()
 
     class Meta:
         model = Registro
         fields = '__all__'
-
-class DetailRegistroSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Registro
-        fields = "__all__"
-        depth = 1
-
-
-class RegistrOpoSerializer(serializers.ModelSerializer):
-    operador = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
-    
-    class Meta:
-        model = RegistroOperador
-        fields = "__all__"
-
-class RegistropDetail(serializers.ModelSerializer):
-    class Meta:
-        model = RegistroOperador
-        fields = "__all__"
-        depth = 1
