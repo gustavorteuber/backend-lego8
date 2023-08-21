@@ -3,13 +3,18 @@ from rest_framework.views import APIView
 from rest_framework import status
 from django.http import JsonResponse
 from rest_framework.response import Response
-from .models import Local, Usuario, Registro
-from .serializers import LocalSerializer, UsuarioSerializer, RegistroSerializer
+from .models import Local, Usuario, Registro, LogsMeses
+from .serializers import LocalSerializer, UsuarioSerializer, RegistroSerializer, LogsMesesSerializer
 from rest_framework import viewsets
 from django.db.models import Q
 from datetime import datetime
+from django.utils import timezone
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+
+class LogsMesesList(viewsets.ModelViewSet):
+    queryset = LogsMeses.objects.all()
+    serializer_class = LogsMesesSerializer
 
 class LocalViewSet(viewsets.ModelViewSet):
     queryset = Local.objects.all()
@@ -23,32 +28,22 @@ class RegistroViewSet(viewsets.ModelViewSet):
     queryset = Registro.objects.all()
     serializer_class = RegistroSerializer
 
-class UsuarioProdutividadeView(APIView):
-    def get(self, request, id):
-        try:
-            usuario = Usuario.objects.get(id=id)
-        except Usuario.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        
-        usuario_data = UsuarioSerializer(usuario).data
-        usuario_data['produtividade_diaria'] = usuario.calcular_produtividade_diaria()
-        usuario_data['produtividade_mensal'] = usuario.calcular_produtividade_mensal()
-        usuario_data['produtividade_anual'] = usuario.calcular_produtividade_anual()
+class UsuarioProdutividadeGlobalView(APIView):
+    def get(self, request):
+        usuarios = Usuario.objects.all()
+        data = []
 
-        return Response(usuario_data)
+        for usuario in usuarios:
+            usuario_data = {
+                'username': usuario.user.username,
+                'produtividade_dia_anterior': usuario.calcular_produtividade_dia_anterior(),
+                'produtividade_diaria': usuario.calcular_produtividade_diaria(),
+                'produtividade_mensal': usuario.calcular_produtividade_mensal(),
+                'produtividade_anual': usuario.calcular_produtividade_anual(),
+            }
+            data.append(usuario_data)
 
-def produtividade_operadores(request):
-    operadores = Usuario.objects.all()
-    data = []
-
-    for operador in operadores:
-        data.append({
-            'username': operador.user.username,
-            'horas_mensais': operador.horas_mensais,
-            'produtividade': operador.produtividade,
-        })
-
-    return JsonResponse(data, safe=False)
+        return Response(data)
 
 
 def sum_all_working_hours(request):
@@ -59,3 +54,4 @@ def sum_all_working_hours(request):
         total_working_hours += operator.total_horas_trabalhadas()
     
     return JsonResponse({'total_working_hours': total_working_hours})
+

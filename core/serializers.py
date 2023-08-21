@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from core.models import Local, Usuario, Registro
+from core.models import Local, Usuario, Registro, LogsMeses
 
 class LocalSerializer(serializers.ModelSerializer):
     class Meta:
@@ -19,4 +19,9 @@ class RegistroSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Registro
+        fields = '__all__'
+
+class LogsMesesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LogsMeses
         fields = '__all__'

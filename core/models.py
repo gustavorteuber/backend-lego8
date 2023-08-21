@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.db.models import Q
+from django.utils import timezone
 from datetime import datetime, timedelta
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -11,21 +12,45 @@ class Local(models.Model):
 class Usuario(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     horas_mensais = models.PositiveIntegerField(default=80)
-    produtividade = models.FloatField(default=0.0)  # Campo para armazenar a produtividade
+    produtividade_anterior = models.FloatField(default=0.0) 
+    produtividade_diaria = models.FloatField(default=0.0) 
+    produtividade_mensal = models.FloatField(default=0.0) 
+    produtividade_anual = models.FloatField(default=0.0) 
 
-    def total_horas_trabalhadas(self):
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    if created:
+        Usuario.objects.create(user=instance)
+
+@receiver(post_save, sender=User)
+def save_user_profile(sender, instance, **kwargs):
+    instance.usuario.save()
+
+class LogsMeses(models.Model):
+    usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE)
+    mes = models.PositiveIntegerField()
+    ano = models.PositiveIntegerField()
+    horas_mensais = models.PositiveIntegerField()
+    produtividade_diaria = models.FloatField()
+    produtividade_mensal = models.FloatField()
+    produtividade_anual = models.FloatField()
+
+    def calcular_produtividade_dia_anterior(self):
+        yesterday = timezone.datetime(self.ano, self.mes, 1) - timedelta(days=1)
         registros = Registro.objects.filter(
-            Q(operador_1=self.user) | Q(operador_2=self.user) |
-            Q(operador_3=self.user) | Q(operador_4=self.user)
+            Q(operador_1=self.usuario.user) | Q(operador_2=self.usuario.user) |
+            Q(operador_3=self.usuario.user) | Q(operador_4=self.usuario.user),
+            data=yesterday
         )
         total_horas = sum(registro.horas_trabalhadas() for registro in registros)
-        return total_horas
+        produtividade_dia_anterior = (total_horas / self.horas_mensais) * 100
+        return produtividade_dia_anterior
 
     def calcular_produtividade_diaria(self):
         today = timezone.now().date()
         registros = Registro.objects.filter(
-            Q(operador_1=self.user) | Q(operador_2=self.user) |
-            Q(operador_3=self.user) | Q(operador_4=self.user),
+            Q(operador_1=self.usuario.user) | Q(operador_2=self.usuario.user) |
+            Q(operador_3=self.usuario.user) | Q(operador_4=self.usuario.user),
             data=today
         )
         total_horas = sum(registro.horas_trabalhadas() for registro in registros)
@@ -38,8 +63,8 @@ class Usuario(models.Model):
         last_day_of_month = (first_day_of_month + timedelta(days=32)).replace(day=1) - timedelta(days=1)
         
         registros = Registro.objects.filter(
-            Q(operador_1=self.user) | Q(operador_2=self.user) |
-            Q(operador_3=self.user) | Q(operador_4=self.user),
+            Q(operador_1=self.usuario.user) | Q(operador_2=self.usuario.user) |
+            Q(operador_3=self.usuario.user) | Q(operador_4=self.usuario.user),
             data__range=(first_day_of_month, last_day_of_month)
         )
         
@@ -53,18 +78,19 @@ class Usuario(models.Model):
         last_day_of_year = today.replace(month=12, day=31)
         
         registros = Registro.objects.filter(
-            Q(operador_1=self.user) | Q(operador_2=self.user) |
-            Q(operador_3=self.user) | Q(operador_4=self.user),
+            Q(operador_1=self.usuario.user) | Q(operador_2=self.usuario.user) |
+            Q(operador_3=self.usuario.user) | Q(operador_4=self.usuario.user),
             data__range=(first_day_of_year, last_day_of_year)
         )
         
         total_horas = sum(registro.horas_trabalhadas() for registro in registros)
         produtividade_anual = (total_horas / self.horas_mensais) * 100
         return produtividade_anual
+
 class Registro(models.Model):
     titulo = models.CharField(max_length=100)
     local = models.ForeignKey('Local', on_delete=models.CASCADE)
-    data = models.CharField(max_length=100)
+    data = models.DateField()
     fornecedor = models.CharField(max_length=100)
     peca = models.CharField(max_length=100)
     codigo = models.CharField(max_length=100)
@@ -109,6 +135,7 @@ class Registro(models.Model):
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
+        
         operators = [
             self.operador_1,
             self.operador_2,
@@ -119,9 +146,25 @@ class Registro(models.Model):
         for operator in operators:
             if operator:
                 usuario = operator.usuario
-                usuario.produtividade = usuario.calcular_produtividade()
+                logs_meses = LogsMeses.objects.filter(usuario=usuario).latest('ano', 'mes')
+                usuario.produtividade_dia_anterior = logs_meses.calcular_produtividade_dia_anterior()
+                usuario.produtividade_diaria = logs_meses.calcular_produtividade_diaria()
+                usuario.produtividade_mensal = logs_meses.calcular_produtividade_mensal()
+                usuario.produtividade_anual = logs_meses.calcular_produtividade_anual()
                 usuario.save()
 
+                today = timezone.now().date()
+                LogsMeses.objects.create(
+                    usuario=usuario,
+                    mes=today.month,
+                    ano=today.year,
+                    horas_mensais=usuario.horas_mensais,
+                    produtividade_diaria=usuario.produtividade_diaria,
+                    produtividade_mensal=usuario.produtividade_mensal,
+                    produtividade_anual=usuario.produtividade_anual
+                )
+
+# Signals para atualizar produtividade
 @receiver(post_save, sender=Registro)
 def update_operator_productivity(sender, instance, created, **kwargs):
     if created:
@@ -135,5 +178,33 @@ def update_operator_productivity(sender, instance, created, **kwargs):
         for operator in operators:
             if operator:
                 usuario = operator.usuario
-                usuario.produtividade = usuario.calcular_produtividade()
+                
+                try:
+                    logs_meses = LogsMeses.objects.filter(usuario=usuario).latest('ano', 'mes')
+                except LogsMeses.DoesNotExist:
+                    logs_meses = LogsMeses(
+                        usuario=usuario,
+                        mes=0,
+                        ano=0,
+                        horas_mensais=usuario.horas_mensais,
+                        produtividade_diaria=0.0,
+                        produtividade_mensal=0.0,
+                        produtividade_anual=0.0
+                    )
+                
+                usuario.produtividade_dia_anterior = logs_meses.calcular_produtividade_dia_anterior()
+                usuario.produtividade_diaria = logs_meses.calcular_produtividade_diaria()
+                usuario.produtividade_mensal = logs_meses.calcular_produtividade_mensal()
+                usuario.produtividade_anual = logs_meses.calcular_produtividade_anual()
                 usuario.save()
+
+                today = timezone.now().date()
+                LogsMeses.objects.create(
+                    usuario=usuario,
+                    mes=today.month,
+                    ano=today.year,  # Use the current year
+                    horas_mensais=usuario.horas_mensais,
+                    produtividade_diaria=usuario.produtividade_diaria,
+                    produtividade_mensal=usuario.produtividade_mensal,
+                    produtividade_anual=usuario.produtividade_anual
+                )
